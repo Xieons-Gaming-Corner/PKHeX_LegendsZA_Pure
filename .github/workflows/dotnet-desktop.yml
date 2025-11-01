@@ -1,0 +1,109 @@
+# This workflow builds, tests, signs and packages a WPF/WinForms desktop app on Windows runners.
+# Replace the placeholder values (SOLUTION_FILE, TEST_PROJECT, WAP_PROJECT_DIR, WAP_PROJECT_FILE)
+# with the correct paths for this repository.
+
+name: .NET Core Desktop
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    runs-on: windows-latest
+
+    env:
+      # --- Replace the placeholders below ---
+      # Example: SOLUTION_FILE: PKHeX.sln
+      SOLUTION_FILE: "PKHeX.sln"                               # e.g. PKHeX.sln
+      TEST_PROJECT: "tests/PKHeX.Tests/PKHeX.Tests.csproj"     # path to test project or leave as solution
+      WAP_PROJECT_DIR: "src/PKHeX.Package"                     # directory that will contain AppPackages
+      WAP_PROJECT_FILE: "src/PKHeX.Package/PKHeX.Package.wapproj" # full path to the WAP project file
+      # ---------------------------------------
+      # Secrets expected:
+      # - Base64_Encoded_Pfx   (base64 string of the .pfx file)
+      # - Pfx_Key              (the PFX password)
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Run unit tests
+      run: |
+        echo "Running tests for configuration: ${{ matrix.configuration }}"
+        if (Test-Path "${{ env.TEST_PROJECT }}" ) {
+          dotnet test "${{ env.TEST_PROJECT }}" --configuration ${{ matrix.configuration }} --no-build
+        } else {
+          dotnet test "${{ env.SOLUTION_FILE }}" --configuration ${{ matrix.configuration }} --no-build
+        }
+
+    - name: Restore solution
+      run: |
+        echo "Restoring solution: $env:SOLUTION_FILE"
+        dotnet restore "$env:SOLUTION_FILE"
+
+    - name: Validate signing secrets
+      run: |
+        if (-not $env:BASE64_ENCODED_PFX) { Write-Error "Missing Base64_Encoded_Pfx secret"; exit 1 }
+        if (-not $env:PFX_KEY) { Write-Error "Missing Pfx_Key secret"; exit 1 }
+      env:
+        BASE64_ENCODED_PFX: ${{ secrets.Base64_Encoded_Pfx }}
+        PFX_KEY: ${{ secrets.Pfx_Key }}
+
+    - name: Decode signing certificate (.pfx)
+      run: |
+        $pfxBytes = [System.Convert]::FromBase64String($env:BASE64_ENCODED_PFX)
+        $pfxPath = Join-Path -Path $env:WAP_PROJECT_DIR -ChildPath "GitHubActionsWorkflow.pfx"
+        Write-Host "Writing pfx to $pfxPath"
+        [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+        Write-Host "PFX written."
+      env:
+        BASE64_ENCODED_PFX: ${{ secrets.Base64_Encoded_Pfx }}
+
+    - name: Build & create app package (WAP)
+      run: |
+        $wapproj = "${{ env.WAP_PROJECT_FILE }}"
+        if (-not (Test-Path $wapproj)) {
+          Write-Error "WAP project not found at: $wapproj"
+          exit 1
+        }
+        msbuild $wapproj `
+          /p:Configuration=${{ matrix.configuration }} `
+          /p:AppxBundle=Always `
+          /p:AppxBundlePlatforms="x86|x64" `
+          /p:UapAppxPackageBuildMode=StoreUpload `
+          /p:PackageCertificateKeyFile="GitHubActionsWorkflow.pfx" `
+          /p:PackageCertificatePassword="${{ secrets.Pfx_Key }}"
+      env:
+        Pfx_Key: ${{ secrets.Pfx_Key }}
+
+    - name: Remove signing certificate
+      run: |
+        $pfxPath = Join-Path -Path $env:WAP_PROJECT_DIR -ChildPath "GitHubActionsWorkflow.pfx"
+        if (Test-Path $pfxPath) {
+          Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
+          Write-Host "Removed pfx: $pfxPath"
+        } else {
+          Write-Host "No pfx found to remove at: $pfxPath"
+        }
+
+    - name: Upload MSIX/MSIXBundle artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MSIX-Packages
+        path: ${{ env.WAP_PROJECT_DIR }}\AppPackages\*
