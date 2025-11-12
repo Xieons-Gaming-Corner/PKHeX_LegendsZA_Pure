@@ -261,7 +261,9 @@ public sealed partial class PKMEditor : UserControl, IMainEditor
             var cb = type.IsNotValid(Entity);
             if (cb is null)
                 continue;
-            return WinFormsUtil.FindFirstControlOfType<TabPage>(cb);
+            if (!WinFormsUtil.TryFindFirstControlOfType<TabPage>(cb, out var tab))
+                ArgumentNullException.ThrowIfNull(tab); // we expect a Tab to be the parent
+            return tab;
         }
         return null;
     }
@@ -1011,7 +1013,7 @@ public sealed partial class PKMEditor : UserControl, IMainEditor
 
     private void Update255_MTB(object sender, EventArgs e)
     {
-        if (sender is not MaskedTextBox tb)
+        if (sender is not MaskedTextBox tb || !FieldsLoaded)
             return;
         if (Util.ToInt32(tb.Text) > byte.MaxValue)
             tb.Text = "255";

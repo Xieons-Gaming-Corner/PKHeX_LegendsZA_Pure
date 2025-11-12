@@ -28,6 +28,7 @@ public sealed class GameStrings : IBasicStrings
     public readonly string[] uggoods, ugspheres, ugtraps, ugtreasures;
     public readonly string[] seals, accessories, backdrops, poketchapps;
     public readonly string[] console3ds, languageNames;
+    public readonly string[] wondercard7, wondercard8, wondercard9;
     private readonly string LanguageFilePrefix;
 
     public ReadOnlySpan<string> HiddenPowerTypes => types.AsSpan(1, HiddenPower.TypeCount);
@@ -131,6 +132,10 @@ public sealed class GameStrings : IBasicStrings
         poketchapps = Get("poketchapps");
         console3ds = Get("console3ds");
         languageNames = Get("language");
+
+        wondercard7 = Get("wondercard7");
+        wondercard8 = Get("wondercard8");
+        wondercard9 = Get("wondercard9");
 
         EggName = specieslist[0];
         Gen4 = Get4("hgss");
@@ -886,7 +891,7 @@ public sealed class GameStrings : IBasicStrings
         German => "{0}BEERE",
         French => "BAIE {0}",
         Italian => "BACCA{0}",
-        Spanish => "BAYA {0}",
+        Spanish or SpanishL => "BAYA {0}",
         Korean => "{0}열매",
         ChineseS => "{0}果",
         ChineseT => "{0}果",
@@ -982,7 +987,7 @@ public sealed class GameStrings : IBasicStrings
         French => "Poké Fret", // fr
         Italian => "Pokétrasporto", // it
         German => "Poképorter", // de
-        Spanish => "Pokétransfer", // es
+        Spanish or SpanishL => "Pokétransfer", // es
         Korean => "포케시프터", // ko
         ChineseS => "宝可传送", // zh-Hans
         ChineseT => "寶可傳送", // zh-Hant
